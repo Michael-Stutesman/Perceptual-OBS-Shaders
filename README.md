@@ -179,7 +179,7 @@ The goal is not to “fake reality,” but to **enhance perception in live viewi
 
 Two systems working together:
 
-- **Relight Shader → adds spatial depth**
+- **Relight Shader → adds perceptual lighting**
 - **Motion Shader → adds temporal continuity**
 
 Combined, they create a more stable and visually rich real-time image without increasing render resolution or GPU load significantly.
