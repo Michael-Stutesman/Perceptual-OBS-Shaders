@@ -40,6 +40,10 @@ Incorrect values will break motion accuracy.
 
 ---
 
+### 🌙 2. Raw Mode (recommended default in this repo)
+
+Set Frame Time to: 0
+
 ## Recommended Settings: Motion Strength: 0.7 | Decay Clamp: 0.05 | Depth Influence: 0.3
 
 ---
