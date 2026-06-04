@@ -1,0 +1,264 @@
+// ==========================================================
+// Pseudo 2.5D Relight — Ultra-Lean Screen-Space 3D Effect
+// Maintains OBS/IBS compatibility; pseudo-depth & lighting
+// ==========================================================
+
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 uv_size;
+
+// ---------------- Controls ----------------
+uniform float lightX <string label="Light X"; string widget_type="slider"; float minimum=-1.0; float maximum=1.0; float step=0.01;> = 0.0;
+uniform float lightY <string label="Light Y"; string widget_type="slider"; float minimum=-1.0; float maximum=1.0; float step=0.01;> = 0.0;
+uniform float intensity <string label="Intensity"; string widget_type="slider"; float minimum=-2.5; float maximum=2.5; float step=0.001;> = 0.01;
+uniform float softness <string label="Light Softness"; string widget_type="slider"; float minimum=0.05; float maximum=1.0; float step=0.01;> = 1.0;
+
+uniform float keyWarmth <string label="Key Warmth"; string widget_type="slider"; float minimum=-1.0; float maximum=1.0; float step=0.01;> = 1.0;
+uniform float depthExponent <string label="Depth Exponent"; string widget_type="slider"; float minimum=0.01; float maximum=5.0; float step=0.01;> = 1.0;
+
+uniform float maskMin <string label="Mask Min"; string widget_type="slider"; float minimum=0.0; float maximum=1.0; float step=0.0001;> = 0.0;
+uniform float maskMax <string label="Mask Max"; string widget_type="slider"; float minimum=0.0; float maximum=1.0; float step=0.0001;> = 0.50;
+uniform float maskMid <string label="Mask Mid"; string widget_type="slider"; float minimum=0.0; float maximum=1.0; float step=0.0001;> = 0.25;
+uniform float maskFeather <string label="Mask Feather"; string widget_type="slider"; float minimum=0.0; float maximum=1.0; float step=0.0001;> = 0.0333;
+
+uniform float perceptualStrength <string label="Perceptual Strength"; string widget_type="slider"; float minimum=0.0; float maximum=1.0; float step=0.001;> = 1.0;
+uniform float gammaExponent <string label="Gamma Exponent"; string widget_type="slider"; float minimum=0.01; float maximum=2.2; float step=0.01;> = 1.0;
+
+// ---------------- Highlight Compression ----------------
+uniform float highlightStart
+<
+    string label="Highlight Start";
+    string widget_type="slider";
+    float minimum=0.0;
+    float maximum=1.0;
+    float step=0.001;
+> = 0.70;
+
+uniform float highlightSoften
+<
+    string label="Highlight Softening";
+    string widget_type="slider";
+    float minimum=0.0;
+    float maximum=1.0;
+    float step=0.001;
+> = 0.1;
+
+// ---------------- Toggles ----------------
+uniform bool invertRange <string label="Invert Effect"; string widget_type="checkbox";> = false;
+uniform bool useMid <string label="Use Mid Pivot"; string widget_type="checkbox";> = false;
+
+// ---------------- Insets ----------------
+uniform float insetLeft <string label="Inset Left"; string widget_type="slider"; float minimum=0.0; float maximum=0.5; float step=0.001;> = 0.0;
+uniform float insetRight <string label="Inset Right"; string widget_type="slider"; float minimum=0.0; float maximum=0.5; float step=0.001;> = 0.0;
+uniform float insetTop <string label="Inset Top"; string widget_type="slider"; float minimum=0.0; float maximum=0.5; float step=0.001;> = 0.0;
+uniform float insetBottom <string label="Inset Bottom"; string widget_type="slider"; float minimum=0.0; float maximum=0.5; float step=0.001;> = 0.0;
+
+// ---------------- Sampler ----------------
+sampler_state textureSampler
+{
+    Filter = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+// ---------------- Structs ----------------
+struct VertIn
+{
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+struct VertOut
+{
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+// ---------------- Helpers ----------------
+float luminance(float3 c)
+{
+    return dot(c, float3(0.299, 0.587, 0.114));
+}
+
+// ---------------- Vertex ----------------
+VertOut VSDefault(VertIn v)
+{
+    VertOut o;
+    o.pos = mul(float4(v.pos.xyz, 1.0), ViewProj);
+    o.uv = v.uv;
+    return o;
+}
+
+// ---------------- Pixel ----------------
+float4 PassThrough(VertOut v) : TARGET
+{
+    float2 uv = v.uv;
+
+    if (uv.x < insetLeft || uv.x > 1.0 - insetRight ||
+        uv.y < insetTop  || uv.y > 1.0 - insetBottom)
+    {
+        return image.Sample(textureSampler, uv);
+    }
+
+    // ---------------- Safe Gamma ----------------
+    float safeGamma = max(gammaExponent, 0.01);
+
+    // ---------------- Light Position ----------------
+    float2 lightPos = float2(
+        0.5 + lightX * 0.5,
+        0.5 - lightY * 0.5
+    );
+
+    float intensityScaled = intensity * perceptualStrength;
+
+    // ---------------- Sample Color ----------------
+    float3 color =
+        pow(image.Sample(textureSampler, uv).rgb, safeGamma);
+
+    // ---------------- Neighbor Luminance ----------------
+    float2 offset = 1.0 / uv_size;
+
+    float lumC =
+        luminance(color);
+
+    float lumUp =
+        luminance(
+            image.Sample(
+                textureSampler,
+                clamp(uv + float2(0.0, offset.y), 0.0, 1.0)
+            ).rgb
+        );
+
+    float lumDown =
+        luminance(
+            image.Sample(
+                textureSampler,
+                clamp(uv - float2(0.0, offset.y), 0.0, 1.0)
+            ).rgb
+        );
+
+    float lumLeft =
+        luminance(
+            image.Sample(
+                textureSampler,
+                clamp(uv - float2(offset.x, 0.0), 0.0, 1.0)
+            ).rgb
+        );
+
+    float lumRight =
+        luminance(
+            image.Sample(
+                textureSampler,
+                clamp(uv + float2(offset.x, 0.0), 0.0, 1.0)
+            ).rgb
+        );
+
+    // ---------------- Pseudo-Normal ----------------
+    float2 grad =
+        float2(
+            lumRight - lumLeft,
+            lumUp - lumDown
+        );
+
+    float pseudoDepth =
+        saturate(pow(lumC, depthExponent));
+
+    // ---------------- Range & Contrast ----------------
+    float rangeMask =
+        smoothstep(
+            maskMin - maskFeather,
+            maskMin + maskFeather,
+            pseudoDepth
+        ) *
+        (
+            1.0 -
+            smoothstep(
+                maskMax - maskFeather,
+                maskMax + maskFeather,
+                pseudoDepth
+            )
+        );
+
+    float contrastMask =
+        1.0 + length(grad) * 2.0;
+
+    float subjMask =
+        useMid
+        ? smoothstep(
+            0.0,
+            maskFeather,
+            abs(pseudoDepth - maskMid) /
+            max(maskMax - maskMin, 1e-4)
+        )
+        : 1.0;
+
+    subjMask *= rangeMask * contrastMask;
+    subjMask *= invertRange ? -1.0 : 1.0;
+
+    // ---------------- Falloff ----------------
+    float dist =
+        distance(uv, lightPos);
+
+    float falloff =
+        smoothstep(softness, 0.0, dist);
+
+    float amt =
+        falloff *
+        subjMask *
+        intensityScaled;
+
+    if (amt >= 0.0)
+    {
+        float3 keyTint =
+            float3(
+                lerp(
+                    0.83,
+                    1.17,
+                    keyWarmth * 0.5 + 0.5
+                ),
+                1.0,
+                lerp(
+                    1.17,
+                    0.83,
+                    keyWarmth * 0.5 + 0.5
+                )
+            );
+
+        color += amt * keyTint;
+    }
+    else
+    {
+        color *= max(1.0 + amt, 0.0);
+    }
+
+    // ---------------- Highlight Compression ----------------
+    float highlightMask =
+        smoothstep(
+            highlightStart,
+            1.0,
+            dot(color, float3(0.299, 0.587, 0.114))
+        );
+
+    color *=
+        1.0 -
+        highlightMask *
+        highlightSoften;
+
+    // ---------------- Output ----------------
+    return float4(
+        saturate(
+            pow(color, 1.0 / safeGamma)
+        ),
+        1.0
+    );
+}
+
+// ---------------- Technique ----------------
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v);
+        pixel_shader = PassThrough(v);
+    }
+}
