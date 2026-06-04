@@ -87,7 +87,7 @@ This reduces the “stuttered” feel of lower FPS content when displayed in hig
 | Motion Strength | 0.6 – 0.8 |
 | Decay Clamp | 0.03 – 0.08 |
 | Depth Influence | 0.2 – 0.4 |
-| Frame Time | match stream FPS (e.g. 0.0167 for 60fps, 0.0333 for 30fps) |
+| Frame Time | 0 (Recommended Default/Raw Mode) or match stream FPS (e.g. 0.0167 for 60fps, 0.0333 for 30fps) |
 
 ---
 
