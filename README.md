@@ -152,7 +152,7 @@ The goal is not to “fake reality,” but to **enhance perception in live viewi
 - Both shaders are single-pass
 - No compute shaders
 - No external dependencies
-- Designed for 30–240 FPS streaming pipelines
+- Designed for 30–60 FPS streaming pipelines
 - Motion shader is heavier due to 7-sample temporal blur, but still real-time safe on modern GPUs
 
 ---
