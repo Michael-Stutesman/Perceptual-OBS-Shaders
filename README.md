@@ -1,4 +1,4 @@
-# Real-Time Visual Enhancement Shaders
+# Real-Time Visual Enhancement Shaders/Effects
 
 A lightweight collection of real-time OBS shaders focused on **perceptual lighting** and **motion continuity**.
 
@@ -10,7 +10,7 @@ These shaders are designed to improve the perceived quality of live video withou
 
 This repository contains two core systems:
 
-## 1. Pseudo 2.5D Relight Shader
+## 1. Pseudo 2.5D Relight Effect
 A screen-space lighting system that simulates directional light using luminance gradients and pseudo-depth.
 
 ## 2. Motion Persistence Shader
@@ -99,11 +99,33 @@ This reduces the “stuttered” feel of lower FPS content when displayed in hig
 
 ---
 
+## ⚠️ Frame Time Behavior (Important)
+
+This shader supports **two valid operating modes**:
+
+### 🧭 1. Calibrated Mode (recommended for accuracy)
+Set Frame Time to match your source FPS:
+
+| FPS | Frame Time |
+|-----|-----------|
+| 60 FPS | 0.0167 |
+| 30 FPS | 0.0333 |
+| 24 FPS | 0.0416 |
+
+This produces consistent motion scaling across different content sources.
+
+---
+
+### 🌙 2. Raw Mode (current recommended default)
+Frame Time is set to: 0
+
+---
+
 # ⚙️ How to Use (OBS)
 
-1. Install OBS Shader Filter plugin (StreamFX or equivalent)
+1. Install OBS Shader Filter plugin (Exeldro or equivalent)
 2. Add filter → “Custom Shader”
-3. Load `.shader` file
+3.Load `.shader` or `.effect` file
 4. Apply to:
    - Game capture
    - Display capture
@@ -130,7 +152,7 @@ The goal is not to “fake reality,” but to **enhance perception in live viewi
 - Both shaders are single-pass
 - No compute shaders
 - No external dependencies
-- Designed for 60–240 FPS streaming pipelines
+- Designed for 30–240 FPS streaming pipelines
 - Motion shader is heavier due to 7-sample temporal blur, but still real-time safe on modern GPUs
 
 ---
