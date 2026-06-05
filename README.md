@@ -45,7 +45,7 @@ This creates the illusion of **depth and volume in 2D content**.
 | Control | Value |
 |--------|------|
 | Light Softness | 1.0 |
-| Intensity | 0.01 – 0.02 |
+| Intensity | 0.01 – 0.03 |
 | Highlight Start | 0.70 |
 | Highlight Softening | 0.10 |
 | Depth Exponent | 1.0 |
