@@ -67,7 +67,7 @@ Controls how strongly brightness is interpreted as depth.
 Used to isolate where lighting applies.
 
 - `Mask Min / Max` → depth range selection
-- `Mask Mid` → focal depth pivot
+- `Mask Mid` → focal depth pivot (Brightens above, Darkens below)
 - `Mask Feather` → smooth blending between zones
 
 Leave default unless doing targeted stylization.
