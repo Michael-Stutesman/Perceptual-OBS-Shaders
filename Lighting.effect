@@ -10,7 +10,7 @@ uniform float2 uv_size;
 // ---------------- Controls ----------------
 uniform float lightX <string label="Light X"; string widget_type="slider"; float minimum=-1.0; float maximum=1.0; float step=0.01;> = 0.0;
 uniform float lightY <string label="Light Y"; string widget_type="slider"; float minimum=-1.0; float maximum=1.0; float step=0.01;> = 0.0;
-uniform float intensity <string label="Intensity"; string widget_type="slider"; float minimum=-2.5; float maximum=2.5; float step=0.001;> = 0.01;
+uniform float intensity <string label="Intensity"; string widget_type="slider"; float minimum=-2.5; float maximum=2.5; float step=0.001;> = 0.03;
 uniform float softness <string label="Light Softness"; string widget_type="slider"; float minimum=0.05; float maximum=1.0; float step=0.01;> = 1.0;
 
 uniform float keyWarmth <string label="Key Warmth"; string widget_type="slider"; float minimum=-1.0; float maximum=1.0; float step=0.01;> = 1.0;
