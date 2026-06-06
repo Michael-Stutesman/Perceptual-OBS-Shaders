@@ -3,16 +3,16 @@
 ## Overview
 This shader simulates directional lighting on flat images/video using luminance-based pseudo-depth and edge gradients.
 
-It creates the illusion of 3D form by treating brightness changes as surface orientation.
+It creates the illusion of 3D form by treating brightness changes as surface structure rather than true geometry.
 
 ---
 
 ## How it works (simple view)
 
-- Brightness = height/depth approximation
-- Pixel differences = surface slope
-- Light position = virtual light source
-- Highlight system = controlled rolloff
+- Brightness = depth approximation
+- Pixel-to-pixel changes = surface slope
+- Light position = virtual lamp in 2D space
+- Graphite system = tone compression (not depth shaping)
 
 ---
 
@@ -20,94 +20,118 @@ It creates the illusion of 3D form by treating brightness changes as surface ori
 
 1. Apply shader to a video source in OBS
 2. Start with default settings
-3. Adjust **Light X / Light Y** to move the light
-4. Increase or decrease **Intensity** for stronger or softer depth
+3. Adjust **Light X / Light Y** to position the light
+4. Adjust **Intensity** for how strong the lighting effect feels
 
 ---
 
 ## Recommended Tuning Order
 
 ### 1. Light Position
-- `Light X` → left/right movement
-- `Light Y` → up/down movement
+- `Light X` → moves light left / right
+- `Light Y` → moves light up / down
 
-Think of it like dragging a lamp around the scene.
+Think of it as dragging a lamp across the image.
 
 ---
 
 ### 2. Intensity
-Controls how strong the depth illusion feels.
+Controls how strong the lighting deformation feels.
 
 - Low values → subtle shaping
 - High values → strong sculpted lighting
 
-Recommended range: 0.01- 0.03
+Recommended range: 0.01 – 0.03
 
 ---
 
 ### 3. Softness
 Controls how quickly light fades outward.
 
-- High softness → wide, soft light
-- Low softness → tight, focused light
+- Higher softness → wide, soft lighting falloff
+- Lower softness → tight, focused lighting hotspot
 
 ---
 
 ### 4. Depth Exponent
 Controls how strongly brightness is interpreted as depth.
 
-- 1.0 → balanced
-- Higher → more contrast in depth
-- Lower → flatter surface response
+- 1.0 → natural / balanced response
+- Higher values → stronger contrast in perceived depth
+- Lower values → flatter, smoother surface feel
 
 ---
 
 ### 5. Mask Controls (Advanced)
 
-Used to isolate where lighting applies.
+These isolate where the lighting effect applies based on brightness structure.
 
-- `Mask Min / Max` → depth range selection
-- `Mask Mid` → focal depth pivot (Brightens above, Darkens below)
-- `Mask Feather` → smooth blending between zones
+- `Mask Min` → lower bound of affected range
+- `Mask Max` → upper bound of affected range
+- `Mask Mid` → center pivot for optional mid-focus shaping
+- `Mask Feather` → smooth blending between boundaries
 
-Leave default unless doing targeted stylization.
+### Important behavior note:
+Mask Min/Max define a **selection window**, not compression or remapping.
+They do not shift brightness globally — they only control *where lighting applies*.
 
 ---
 
-### 6. Highlight Controls
+### 6. Graphite Response (Luminance Compression)
 
-Prevents bright areas from clipping or blowing out.
+This is a **tone mapping system**, not a depth system.
+
+It remaps final brightness into a controlled range:
+
+- `Min Lum` → lifts darkest values up
+- `Max Lum` → clamps brightest values down
+- `Dark Response` → shifts how shadows curve inside that range
+
+### Correct behavior model:
+
+- Darkest pixels → pulled upward toward `Min Lum`
+- Brightest pixels → pulled downward toward `Max Lum`
+- Midtones → redistributed smoothly between them
+
+⚠️ This is NOT inverted anymore:
+It behaves the same direction as the selective color shader.
+
+---
+
+### 7. Highlight Compression
+
+Prevents bright areas from clipping.
 
 - `Highlight Start` → where compression begins
-- `Highlight Softening` → how strong the rolloff is
+- `Highlight Softening` → strength of rolloff
 
-Recommended: Start: 0.70 | Softening: 0.10
-
-Behavior:
-- Below threshold → unchanged
-- Above threshold → gradually compressed
+Recommended:
+- Start: 0.70
+- Softening: 0.10
 
 ---
 
 ## Tips
 
-- Lower intensity for face cam / human subjects
-- Higher intensity works well for landscapes or UI capture
-- Combine with slight sharpening for stronger depth illusion
+- Use low intensity for faces / humans (prevents over-sculpting)
+- Higher intensity works well for landscapes, UI, and game footage
+- Slight sharpening enhances perceived depth dramatically
+- Graphite controls should be adjusted last (after lighting is tuned)
 
 ---
 
 ## Limitations
 
-- Not true 3D lighting
-- Based on luminance, not geometry
-- Strong compression can flatten very bright scenes
+- Not true 3D lighting (no real geometry)
+- Based entirely on luminance estimation
+- Heavy compression can flatten bright scenes
+- Masking does not create depth — only selection regions
 
 ---
 
 ## Best Use Cases
 
-- Game capture enhancement
 - Cinematic OBS scenes
+- Game capture enhancement
 - UI depth stylization
-- Streaming overlays
+- Subtle “volumetric feel” for flat video
