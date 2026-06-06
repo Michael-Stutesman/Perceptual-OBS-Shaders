@@ -102,19 +102,6 @@ Controls how strongly shadows are reshaped.
 
 ---
 
-## ⚠️ Is it reversed?
-
-No.
-
-It is **intentionally non-linear**:
-
-- Shadows are weighted more heavily than highlights
-- Highlights remain mostly stable unless compression is strong
-
-So it may *feel inverted* if you expect linear behavior, but it is functioning correctly.
-
----
-
 # 🧠 Mid Pivot System (HINGE EXPLAINED)
 
 ## What “Use Mid Pivot” does
