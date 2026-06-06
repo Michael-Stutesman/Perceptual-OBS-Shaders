@@ -1,8 +1,8 @@
 # Real-Time Visual Enhancement Shaders/Effects
 
-A lightweight collection of real-time OBS shaders focused on **perceptual lighting** and **motion continuity**.
+A lightweight collection of real-time OBS shaders focused on **perceptual lighting**, **luminance shaping**, and **motion continuity**.
 
-These shaders are designed to improve the perceived quality of live video without heavy GPU cost, extra passes, or offline rendering.
+These shaders improve perceived visual quality without heavy GPU cost, extra render passes, or offline processing.
 
 ---
 
@@ -14,29 +14,34 @@ This repository contains two core systems:
 A screen-space lighting system that simulates directional light using luminance gradients and pseudo-depth.
 
 ## 2. Motion Persistence Shader
-A temporal smoothing system that blends motion over time to reduce perceived frame gaps (especially useful for 30 FPS streams - Look as if they are displayed at higher refresh rates).
+A temporal smoothing system that blends motion over time to reduce perceived frame gaps (useful for 30 FPS content on higher refresh displays).
 
 ---
 
 # 💡 Pseudo 2.5D Relight
 
 ## What it does
-Simulates a controllable light source across flat video by:
+
+Simulates directional lighting on flat images/video by:
+
 - estimating pseudo-depth from luminance
 - deriving surface direction from pixel gradients
-- applying directional shading + highlight control
+- applying directional lighting + highlight compression
+- remapping luminance using a controllable “graphite response curve”
 
-This creates the illusion of **depth and volume in 2D content**.
+This creates the illusion of **depth, volume, and lighting in 2D content**.
 
 ---
 
 ## Key Features
+
 - Screen-space pseudo-3D lighting
 - Adjustable light position (X/Y)
 - Warm/cool key tinting
 - Depth-based masking system
+- Graphite luminance compression system
 - Highlight rolloff (film-style compression)
-- Fully real-time (no extra passes)
+- Fully real-time (single pass, OBS-safe)
 
 ---
 
@@ -46,32 +51,146 @@ This creates the illusion of **depth and volume in 2D content**.
 |--------|------|
 | Light Softness | 1.0 |
 | Intensity | 0.01 – 0.03 |
-| Highlight Start | 0.70 |
-| Highlight Softening | 0.10 |
+| Highlight Start | 0.90 – 0.95 |
+| Highlight Softening | 0.05 – 0.10 |
 | Depth Exponent | 1.0 |
+| Graphite Dark Response | ~0.9 – 1.2 |
+| Max Luminance | 0.995 |
+| Min Luminance | 0.005 |
 
 ---
 
-## Visual Effect Summary
-- Darker areas gain directional shading
-- Bright areas gently roll off instead of clipping
-- Midtones gain subtle “form”
+# 🌑 Graphite Luminance System (IMPORTANT)
+
+This replaces simple brightness with a **controlled compression mapping system**.
+
+## What it does
+
+Instead of leaving brightness linear:
+
+- Dark values are gently lifted toward `Min Lum`
+- Bright values are gently compressed toward `Max Lum`
+- Midtones are preserved unless modified by shadow weighting
+
+---
+
+## Mental Model (IMPORTANT)
+
+Think of it like this:
+
+```
+Before:
+0.00 → black
+1.00 → pure white
+
+After:
+0.00 → lifted to MinLum (not pure black)
+1.00 → compressed to MaxLum (not pure white)
+```
+
+Then the entire range is redistributed smoothly between them.
+
+---
+
+## Graphite Dark Response
+
+Controls how strongly shadows are reshaped.
+
+- Lower values → more linear / natural
+- Higher values → stronger “ink / graphite lift”
+- Uses a shadow-weighted curve so only darker regions are affected more heavily
+
+---
+
+## ⚠️ Is it reversed?
+
+No.
+
+It is **intentionally non-linear**:
+
+- Shadows are weighted more heavily than highlights
+- Highlights remain mostly stable unless compression is strong
+
+So it may *feel inverted* if you expect linear behavior, but it is functioning correctly.
+
+---
+
+# 🧠 Mid Pivot System (HINGE EXPLAINED)
+
+## What “Use Mid Pivot” does
+
+The mid pivot acts like a **hinge point in luminance space**.
+
+Imagine a folding door:
+
+```
+Dark side  ←───── hinge ─────→ Bright side
+```
+
+## Behavior
+
+- Values **below Mid** → pulled darker or suppressed
+- Values **above Mid** → lifted or brightened
+- The pivot itself stays stable
+
+---
+
+## Simple explanation
+
+- Mid = neutral anchor
+- Below mid = “falls into shadow side”
+- Above mid = “lifts into highlight side”
+
+---
+
+## When to use it
+
+- Faces (subtle sculpting)
+- UI separation
+- Cinematic lighting control
+- Depth isolation inside flat scenes
+
+---
+
+## Recommended Mid Range
+
+| Use Case | Value |
+|----------|------|
+| Natural balance | 0.45 – 0.55 |
+| Dark-heavy scenes | 0.35 – 0.45 |
+| Bright UI / overlays | 0.55 – 0.70 |
+
+---
+
+# 💡 Highlight Controls
+
+Prevents bright areas from clipping or flattening.
+
+- `Highlight Start` → where compression begins
+- `Highlight Softening` → how gradual the rolloff is
+
+Recommended:
+- Start: 0.90 – 0.95
+- Softening: 0.05 – 0.10
 
 ---
 
 # 🎞 Motion Persistence Shader
 
 ## What it does
-Simulates temporal motion continuity by blending:
+
+Simulates temporal continuity by blending:
+
 - current frame
 - previous frame buffer
 - motion-direction sampling
 
-This reduces the “stuttered” feel of lower FPS content when displayed in higher refresh environments.
+This reduces perceived stutter in lower FPS content.
 
 ---
 
 ## Key Features
+
 - Motion-based temporal blending
 - Directional blur along motion vectors
 - Depth-aware persistence control
@@ -80,44 +199,33 @@ This reduces the “stuttered” feel of lower FPS content when displayed in hig
 
 ---
 
-## Recommended Settings (General Use)
+## Recommended Settings
 
 | Control | Value |
 |--------|------|
 | Motion Strength | 0.6 – 0.8 |
 | Decay Clamp | 0.03 – 0.08 |
 | Depth Influence | 0.2 – 0.4 |
-| Frame Time | 0 (Recommended Default/Raw Mode) or match stream FPS (e.g. 0.0167 for 60fps, 0.0333 for 30fps) |
+| Frame Time | 0 (Raw Mode) or match FPS |
 
 ---
 
-## Visual Effect Summary
-- Reduces perceived judder in motion
-- Smooths transitions between frames
-- Preserves sharpness while improving continuity
-- Creates a subtle “higher FPS feel” without interpolation artifacts
+## Frame Time Modes
 
----
-
-## ⚠️ Frame Time Behavior (Important)
-
-This shader supports **two valid operating modes**:
-
-### 🧭 1. Calibrated Mode (recommended for accuracy)
-Set Frame Time to match your source FPS:
+### 🧭 Calibrated Mode (accurate timing)
 
 | FPS | Frame Time |
 |-----|-----------|
-| 60 FPS | 0.0167 |
-| 30 FPS | 0.0333 |
-| 24 FPS | 0.0416 |
-
-This produces consistent motion scaling across different content sources.
+| 60 | 0.0167 |
+| 30 | 0.0333 |
+| 24 | 0.0416 |
 
 ---
 
-### 🌙 2. Raw Mode (current recommended default)
-Frame Time is set to: 0
+### 🌙 Raw Mode (recommended default)
+
+- Frame Time = 0
+- Shader derives behavior from runtime sampling
 
 ---
 
@@ -125,7 +233,7 @@ Frame Time is set to: 0
 
 1. Install OBS Shader Filter plugin (Exeldro or equivalent)
 2. Add filter → “Custom Shader”
-3.Load `.shader` or `.effect` file
+3. Load `.shader` / `.effect` file
 4. Apply to:
    - Game capture
    - Display capture
@@ -137,23 +245,23 @@ Frame Time is set to: 0
 
 These shaders prioritize:
 
-- real-time performance over physical accuracy  
-- perceptual improvement over raw simulation  
-- minimal texture sampling  
+- perceptual improvement over physical accuracy  
+- real-time performance over simulation fidelity  
+- minimal sampling cost  
 - controllable aesthetic response  
-- compatibility with OBS pipeline constraints  
+- OBS pipeline compatibility  
 
-The goal is not to “fake reality,” but to **enhance perception in live viewing conditions**.
+The goal is not realism alone — but **better perceived clarity, depth, and motion stability in live viewing conditions**.
 
 ---
 
 # 🔧 Performance Notes
 
-- Both shaders are single-pass
+- Single-pass rendering
 - No compute shaders
 - No external dependencies
-- Designed for 30–60 FPS streaming pipelines
-- Motion shader is heavier due to 7-sample temporal blur, but still real-time safe on modern GPUs
+- Designed for 30–60 FPS streaming
+- Motion shader is heavier due to temporal sampling, but GPU-safe on modern hardware
 
 ---
 
@@ -162,16 +270,16 @@ The goal is not to “fake reality,” but to **enhance perception in live viewi
 - Live streaming (Twitch / YouTube)
 - Game capture enhancement
 - Cinematic OBS scenes
-- UI / motion design overlays
+- UI depth styling
 - Low-FPS → high-refresh perception smoothing
 
 ---
 
 # ⚖️ Notes
 
-- Motion persistence depends on correct `previous_output` buffer support in OBS shader pipeline
-- FrameTime should be set manually for best accuracy
-- Highlight compression is intentionally subtle to avoid “washed” highlights
+- Motion persistence requires proper previous-frame buffer support in OBS
+- FrameTime accuracy improves motion realism but is optional
+- Graphite system is intentionally non-linear for perceptual shaping
 
 ---
 
@@ -179,7 +287,7 @@ The goal is not to “fake reality,” but to **enhance perception in live viewi
 
 Two systems working together:
 
-- **Lighting Effect → adds perceptual lighting**
-- **Motion Shader → adds temporal continuity**
+- **Relight Shader → spatial perception (light + depth illusion)**
+- **Motion Shader → temporal perception (motion continuity)**
 
-Combined, they create a more stable and visually rich real-time image without increasing render resolution or GPU load significantly.
+Combined, they enhance perceived realism without increasing resolution or render cost.
