@@ -54,7 +54,7 @@ This creates the illusion of **depth, volume, and lighting in 2D content**.
 | Highlight Start | 0.90 – 0.95 |
 | Highlight Softening | 0.05 – 0.10 |
 | Depth Exponent | 1.0 |
-| Graphite Dark Response | ~0.9 – 1.2 |
+| Graphite Dark Response | ~0.9 – 1.0 |
 | Max Luminance | 0.995 |
 | Min Luminance | 0.005 |
 
