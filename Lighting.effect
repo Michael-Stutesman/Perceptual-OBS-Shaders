@@ -1,6 +1,6 @@
 // ==========================================================
 // Pseudo 2.5D Relight — Ultra-Lean Screen-Space 3D Effect
-// Maintains OBS/IBS compatibility; pseudo-depth & lighting
+// FIXED: Proper luminance pipeline separation (depth vs tone)
 // ==========================================================
 
 uniform float4x4 ViewProj;
@@ -10,7 +10,7 @@ uniform float2 uv_size;
 // ---------------- Controls ----------------
 uniform float lightX <string label="Light X"; string widget_type="slider"; float minimum=-1.0; float maximum=1.0; float step=0.01;> = 0.0;
 uniform float lightY <string label="Light Y"; string widget_type="slider"; float minimum=-1.0; float maximum=1.0; float step=0.01;> = 0.0;
-uniform float intensity <string label="Intensity"; string widget_type="slider"; float minimum=-2.5; float maximum=2.5; float step=0.001;> = 0.03;
+uniform float intensity <string label="Intensity"; string widget_type="slider"; float minimum=-2.5; float maximum=2.5; float step=0.001;> = 0.02;
 uniform float softness <string label="Light Softness"; string widget_type="slider"; float minimum=0.05; float maximum=1.0; float step=0.01;> = 1.0;
 
 uniform float keyWarmth <string label="Key Warmth"; string widget_type="slider"; float minimum=-1.0; float maximum=1.0; float step=0.01;> = 1.0;
@@ -24,24 +24,14 @@ uniform float maskFeather <string label="Mask Feather"; string widget_type="slid
 uniform float perceptualStrength <string label="Perceptual Strength"; string widget_type="slider"; float minimum=0.0; float maximum=1.0; float step=0.001;> = 1.0;
 uniform float gammaExponent <string label="Gamma Exponent"; string widget_type="slider"; float minimum=0.01; float maximum=2.2; float step=0.01;> = 1.0;
 
-// ---------------- Highlight Compression ----------------
-uniform float highlightStart
-<
-    string label="Highlight Start";
-    string widget_type="slider";
-    float minimum=0.0;
-    float maximum=1.0;
-    float step=0.001;
-> = 0.70;
+// ---------------- Graphite ----------------
+uniform float darkResponse <string label="Graphite Dark Response"; string widget_type="slider"; float minimum=0.1; float maximum=2.0; float step=0.01;> = 0.95;
+uniform float maxLum <string label="Max Luminance"; string widget_type="slider"; float minimum=0.5; float maximum=1.0; float step=0.001;> = 0.995;
+uniform float minLum <string label="Min Luminance"; string widget_type="slider"; float minimum=0.0; float maximum=0.5; float step=0.001;> = 0.005;
 
-uniform float highlightSoften
-<
-    string label="Highlight Softening";
-    string widget_type="slider";
-    float minimum=0.0;
-    float maximum=1.0;
-    float step=0.001;
-> = 0.1;
+// ---------------- Highlight Compression ----------------
+uniform float highlightStart <string label="Highlight Start"; string widget_type="slider"; float minimum=0.0; float maximum=1.0; float step=0.001;> = 0.95;
+uniform float highlightSoften <string label="Highlight Softening"; string widget_type="slider"; float minimum=0.0; float maximum=1.0; float step=0.001;> = 0.05;
 
 // ---------------- Toggles ----------------
 uniform bool invertRange <string label="Invert Effect"; string widget_type="checkbox";> = false;
@@ -100,129 +90,65 @@ float4 PassThrough(VertOut v) : TARGET
         return image.Sample(textureSampler, uv);
     }
 
-    // ---------------- Safe Gamma ----------------
+    float2 px = 1.0 / uv_size;
+
+    float3 raw = image.Sample(textureSampler, uv).rgb;
+
+    // ---------------- SAFE GAMMA ----------------
     float safeGamma = max(gammaExponent, 0.01);
+    float3 color = pow(raw, safeGamma);
 
-    // ---------------- Light Position ----------------
-    float2 lightPos = float2(
-        0.5 + lightX * 0.5,
-        0.5 - lightY * 0.5
-    );
-
-    float intensityScaled = intensity * perceptualStrength;
-
-    // ---------------- Sample Color ----------------
-    float3 color =
-        pow(image.Sample(textureSampler, uv).rgb, safeGamma);
-
-    // ---------------- Neighbor Luminance ----------------
-    float2 offset = 1.0 / uv_size;
-
-    float lumC =
-        luminance(color);
+    // ---------------- RAW LUMINANCE (IMPORTANT FIX) ----------------
+    float lumC = luminance(color);
 
     float lumUp =
-        luminance(
-            image.Sample(
-                textureSampler,
-                clamp(uv + float2(0.0, offset.y), 0.0, 1.0)
-            ).rgb
-        );
+        luminance(pow(image.Sample(textureSampler, uv + float2(0, px.y)).rgb, safeGamma));
 
     float lumDown =
-        luminance(
-            image.Sample(
-                textureSampler,
-                clamp(uv - float2(0.0, offset.y), 0.0, 1.0)
-            ).rgb
-        );
+        luminance(pow(image.Sample(textureSampler, uv - float2(0, px.y)).rgb, safeGamma));
 
     float lumLeft =
-        luminance(
-            image.Sample(
-                textureSampler,
-                clamp(uv - float2(offset.x, 0.0), 0.0, 1.0)
-            ).rgb
-        );
+        luminance(pow(image.Sample(textureSampler, uv - float2(px.x, 0)).rgb, safeGamma));
 
     float lumRight =
-        luminance(
-            image.Sample(
-                textureSampler,
-                clamp(uv + float2(offset.x, 0.0), 0.0, 1.0)
-            ).rgb
-        );
+        luminance(pow(image.Sample(textureSampler, uv + float2(px.x, 0)).rgb, safeGamma));
 
-    // ---------------- Pseudo-Normal ----------------
-    float2 grad =
-        float2(
-            lumRight - lumLeft,
-            lumUp - lumDown
-        );
+    // ---------------- GRADIENT ----------------
+    float2 grad = float2(lumRight - lumLeft, lumUp - lumDown);
 
-    float pseudoDepth =
-        saturate(pow(lumC, depthExponent));
+    // ---------------- PSEUDO DEPTH (NO REMAP HERE) ----------------
+    float pseudoDepth = saturate(pow(lumC, depthExponent));
 
-    // ---------------- Range & Contrast ----------------
+    // ---------------- MASK ----------------
     float rangeMask =
-        smoothstep(
-            maskMin - maskFeather,
-            maskMin + maskFeather,
-            pseudoDepth
-        ) *
-        (
-            1.0 -
-            smoothstep(
-                maskMax - maskFeather,
-                maskMax + maskFeather,
-                pseudoDepth
-            )
-        );
+        smoothstep(maskMin - maskFeather, maskMin + maskFeather, pseudoDepth) *
+        (1.0 - smoothstep(maskMax - maskFeather, maskMax + maskFeather, pseudoDepth));
 
-    float contrastMask =
-        1.0 + length(grad) * 2.0;
+    float contrastMask = 1.0 + length(grad) * 2.0;
 
     float subjMask =
         useMid
-        ? smoothstep(
-            0.0,
-            maskFeather,
-            abs(pseudoDepth - maskMid) /
-            max(maskMax - maskMin, 1e-4)
-        )
+        ? smoothstep(0.0, maskFeather,
+            abs(pseudoDepth - maskMid) / max(maskMax - maskMin, 1e-4))
         : 1.0;
 
     subjMask *= rangeMask * contrastMask;
     subjMask *= invertRange ? -1.0 : 1.0;
 
-    // ---------------- Falloff ----------------
-    float dist =
-        distance(uv, lightPos);
+    // ---------------- LIGHT ----------------
+    float2 lightPos = float2(0.5 + lightX * 0.5, 0.5 - lightY * 0.5);
+    float dist = distance(uv, lightPos);
+    float falloff = smoothstep(softness, 0.0, dist);
 
-    float falloff =
-        smoothstep(softness, 0.0, dist);
-
-    float amt =
-        falloff *
-        subjMask *
-        intensityScaled;
+    float amt = falloff * subjMask * intensity * perceptualStrength;
 
     if (amt >= 0.0)
     {
-        float3 keyTint =
-            float3(
-                lerp(
-                    0.83,
-                    1.17,
-                    keyWarmth * 0.5 + 0.5
-                ),
-                1.0,
-                lerp(
-                    1.17,
-                    0.83,
-                    keyWarmth * 0.5 + 0.5
-                )
-            );
+        float3 keyTint = float3(
+            lerp(0.83, 1.17, keyWarmth * 0.5 + 0.5),
+            1.0,
+            lerp(1.17, 0.83, keyWarmth * 0.5 + 0.5)
+        );
 
         color += amt * keyTint;
     }
@@ -231,24 +157,29 @@ float4 PassThrough(VertOut v) : TARGET
         color *= max(1.0 + amt, 0.0);
     }
 
-    // ---------------- Highlight Compression ----------------
+    // ---------------- GRAPHITE LUMINANCE COMPRESSION (FIXED BEHAVIOR) ----------------
+    float lumFinal = luminance(color);
+    lumFinal = saturate(lumFinal);
+
+    float shadowWeight = 1.0 - smoothstep(0.39, 0.55, lumFinal);
+
+    float lumRemap =
+        minLum +
+        (maxLum - minLum) *
+        lerp(lumFinal, pow(lumFinal, darkResponse), shadowWeight);
+
+    float scale = lumRemap / max(lumFinal, 1e-5);
+    color *= scale;
+
+    // ---------------- HIGHLIGHT COMPRESSION ----------------
     float highlightMask =
-        smoothstep(
-            highlightStart,
-            1.0,
-            dot(color, float3(0.299, 0.587, 0.114))
-        );
+        smoothstep(highlightStart, 1.0, lumFinal);
 
-    color *=
-        1.0 -
-        highlightMask *
-        highlightSoften;
+    color *= 1.0 - highlightMask * highlightSoften;
 
-    // ---------------- Output ----------------
+    // ---------------- OUTPUT ----------------
     return float4(
-        saturate(
-            pow(color, 1.0 / safeGamma)
-        ),
+        saturate(pow(color, 1.0 / safeGamma)),
         1.0
     );
 }
