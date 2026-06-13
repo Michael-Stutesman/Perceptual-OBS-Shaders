@@ -44,7 +44,7 @@ Incorrect values will break motion accuracy.
 
 Set Frame Time to: 0
 
-## Recommended Settings: Motion Strength: 0.7 | Decay Clamp: 0.03 | Depth Influence: 0.0
+## Recommended Settings: Motion Strength: 0.7 | Decay Clamp: 0.05 | Depth Influence: 0.0
 
 ---
 
