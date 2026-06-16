@@ -12,7 +12,7 @@ It makes 30 FPS content feel smoother on high refresh displays without true fram
 - Compares current frame vs previous frame
 - Detects motion via luminance difference
 - Builds motion direction vector
-- Blends along motion path
+- Blends along motion path using stabilized temporal feedback
 
 Result: smoother perceived movement without generating fake frames.
 
@@ -28,7 +28,7 @@ Result: smoother perceived movement without generating fake frames.
 
 ## Critical Setting: Frame Time
 
-This is extremely important.
+This controls motion scaling consistency.
 
 | FPS Source | Frame Time |
 |-----------|------------|
@@ -36,15 +36,33 @@ This is extremely important.
 | 30 FPS | 0.0333 |
 | 24 FPS | 0.0416 |
 
-Incorrect values will break motion accuracy.
+Incorrect values may affect motion intensity and pacing, but the shader will remain stable due to built-in normalization and stabilization logic.
 
 ---
 
-### 🌙 2. Raw Mode (recommended default in this repo)
+## 🌙 Recommended Mode (Default in this repo)
 
-Set Frame Time to: 0
+Set:
 
-## Recommended Settings: Motion Strength: 0.7 | Decay Clamp: 0.05 | Depth Influence: 0.0
+Frame Time = 0
+
+This enables the shader’s internal stabilized timing mode.
+
+In this mode:
+- motion is normalized internally
+- frame pacing differences are smoothed
+- behavior remains consistent across sources
+
+This is the recommended configuration for most users in this repository.
+
+---
+
+## Recommended Settings (Default Preset)
+
+Motion Strength: 0.7  
+Decay Clamp: 0.05  
+Depth Influence: 0.0  
+Frame Time: 0 (Recommended Mode)
 
 ---
 
@@ -59,7 +77,7 @@ Controls how much past frames influence the image.
 ---
 
 ### Decay Clamp
-Controls trail length.
+Controls trail length and persistence cutoff.
 
 - Low → short, crisp motion
 - High → long ghost trails
@@ -67,29 +85,30 @@ Controls trail length.
 ---
 
 ### Depth Influence
-Controls how motion behaves based on brightness.
+Controls brightness-based motion behavior.
 
-- Dark areas → reduced motion persistence
-- Bright areas → more visible trails
+- Dark areas → reduced persistence
+- Bright areas → increased visibility of motion trails
 
-This helps preserve perceived sharpness.
+Helps maintain perceived sharpness in mixed lighting scenes.
 
 ---
 
 ## Visual Behavior
 
-- Fast motion becomes smoother
+- Fast motion becomes smoother and more continuous
 - Camera pans feel less choppy
 - UI elements glide more naturally
-- No frame duplication artifacts
+- Motion trails are stabilized (reduced jitter compared to raw frame-diff methods)
 
 ---
 
 ## Limitations
 
 - Requires previous frame buffer support
-- Can introduce ghosting at very high strength
+- Can introduce ghosting at very high strength values
 - Not true interpolation (no new frames are generated)
+- Still approximates motion (no explicit velocity buffer used)
 
 ---
 
@@ -98,7 +117,7 @@ This helps preserve perceived sharpness.
 - 30 FPS gameplay streams
 - Console capture smoothing
 - High refresh display playback
-- Motion-heavy scenes (FPS games, camera pans)
+- Motion-heavy scenes (FPS games, camera pans, scrolling content)
 
 ---
 
@@ -106,4 +125,19 @@ This helps preserve perceived sharpness.
 
 - Lower strength for competitive gameplay (clarity first)
 - Increase decay slightly for cinematic feel
-- Match frame time exactly for best stability
+- Keep Frame Time at 0 (Recommended Mode) unless troubleshooting timing issues
+- If motion feels too heavy, reduce Motion Strength before touching other settings
+
+---
+
+## Design Note (Important)
+
+This shader is intentionally designed as a single-pass temporal coherence system, not a true motion vector renderer.
+
+It prioritizes:
+- stability
+- simplicity
+- low overhead
+- consistent visual smoothing across varied sources
+
+over physically accurate motion reconstruction.
