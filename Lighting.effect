@@ -64,7 +64,7 @@ struct VertOut
     float2 uv  : TEXCOORD0;
 };
 
-// ---------------- Helpers ----------------
+// ---------------- Helper ----------------
 float luminance(float3 c)
 {
     return dot(c, float3(0.299, 0.587, 0.114));
@@ -84,6 +84,7 @@ float4 PassThrough(VertOut v) : TARGET
 {
     float2 uv = v.uv;
 
+    // early exit (kept first for efficiency)
     if (uv.x < insetLeft || uv.x > 1.0 - insetRight ||
         uv.y < insetTop  || uv.y > 1.0 - insetBottom)
     {
@@ -92,48 +93,58 @@ float4 PassThrough(VertOut v) : TARGET
 
     float2 px = 1.0 / uv_size;
 
-    float3 raw = image.Sample(textureSampler, uv).rgb;
-
-    // ---------------- SAFE GAMMA ----------------
+    // gamma once
     float safeGamma = max(gammaExponent, 0.01);
-    float3 color = pow(raw, safeGamma);
+    float invGamma = 1.0 / safeGamma;
 
-    // ---------------- RAW LUMINANCE (IMPORTANT FIX) ----------------
-    float lumC = luminance(color);
+    // ---------------- CENTER SAMPLE ----------------
+    float3 cRaw = image.Sample(textureSampler, uv).rgb;
+    float3 cCol = pow(cRaw, safeGamma);
+    float lumC = luminance(cCol);
 
-    float lumUp =
-        luminance(pow(image.Sample(textureSampler, uv + float2(0, px.y)).rgb, safeGamma));
+    // ---------------- NEIGHBOR SAMPLES (RAW ONLY ONCE) ----------------
+    float3 uRaw = image.Sample(textureSampler, uv + float2(0, px.y)).rgb;
+    float3 dRaw = image.Sample(textureSampler, uv - float2(0, px.y)).rgb;
+    float3 lRaw = image.Sample(textureSampler, uv - float2(px.x, 0)).rgb;
+    float3 rRaw = image.Sample(textureSampler, uv + float2(px.x, 0)).rgb;
 
-    float lumDown =
-        luminance(pow(image.Sample(textureSampler, uv - float2(0, px.y)).rgb, safeGamma));
+    // gamma applied once per neighbor (no nested pow inside luminance)
+    float3 u = pow(uRaw, safeGamma);
+    float3 d = pow(dRaw, safeGamma);
+    float3 l = pow(lRaw, safeGamma);
+    float3 r = pow(rRaw, safeGamma);
 
-    float lumLeft =
-        luminance(pow(image.Sample(textureSampler, uv - float2(px.x, 0)).rgb, safeGamma));
-
-    float lumRight =
-        luminance(pow(image.Sample(textureSampler, uv + float2(px.x, 0)).rgb, safeGamma));
+    float lumU = luminance(u);
+    float lumD = luminance(d);
+    float lumL = luminance(l);
+    float lumR = luminance(r);
 
     // ---------------- GRADIENT ----------------
-    float2 grad = float2(lumRight - lumLeft, lumUp - lumDown);
+    float2 grad = float2(lumR - lumL, lumU - lumD);
+    float gradLen = length(grad);
 
-    // ---------------- PSEUDO DEPTH (NO REMAP HERE) ----------------
+    // ---------------- PSEUDO DEPTH ----------------
     float pseudoDepth = saturate(pow(lumC, depthExponent));
 
-    // ---------------- MASK ----------------
-    float rangeMask =
-        smoothstep(maskMin - maskFeather, maskMin + maskFeather, pseudoDepth) *
-        (1.0 - smoothstep(maskMax - maskFeather, maskMax + maskFeather, pseudoDepth));
+    // cached mask bounds
+    float rangeMin = maskMin - maskFeather;
+    float rangeMax = maskMax + maskFeather;
+    float denom = max(maskMax - maskMin, 1e-4);
 
-    float contrastMask = 1.0 + length(grad) * 2.0;
+    float rangeMask =
+        smoothstep(rangeMin, maskMin + maskFeather, pseudoDepth) *
+        (1.0 - smoothstep(maskMax - maskFeather, rangeMax, pseudoDepth));
 
     float subjMask =
         useMid
         ? smoothstep(0.0, maskFeather,
-            abs(pseudoDepth - maskMid) / max(maskMax - maskMin, 1e-4))
+            abs(pseudoDepth - maskMid) / denom)
         : 1.0;
 
-    subjMask *= rangeMask * contrastMask;
-    subjMask *= invertRange ? -1.0 : 1.0;
+    float contrastMask = 1.0 + gradLen * 2.0;
+
+    subjMask = subjMask * rangeMask * contrastMask;
+    subjMask *= (invertRange ? -1.0 : 1.0);
 
     // ---------------- LIGHT ----------------
     float2 lightPos = float2(0.5 + lightX * 0.5, 0.5 - lightY * 0.5);
@@ -142,46 +153,46 @@ float4 PassThrough(VertOut v) : TARGET
 
     float amt = falloff * subjMask * intensity * perceptualStrength;
 
+    // start from center color
+    float3 color = cCol;
+
+    // ---------------- LIGHTING APPLY ----------------
     if (amt >= 0.0)
     {
-        float3 keyTint = float3(
-            lerp(0.83, 1.17, keyWarmth * 0.5 + 0.5),
+        float warm = keyWarmth * 0.5 + 0.5;
+
+        float3 tint = float3(
+            lerp(0.83, 1.17, warm),
             1.0,
-            lerp(1.17, 0.83, keyWarmth * 0.5 + 0.5)
+            lerp(1.17, 0.83, warm)
         );
 
-        color += amt * keyTint;
+        color += amt * tint;
     }
     else
     {
         color *= max(1.0 + amt, 0.0);
     }
 
-    // ---------------- GRAPHITE LUMINANCE COMPRESSION (FIXED BEHAVIOR) ----------------
+    // ---------------- LUMINANCE COMPRESSION ----------------
     float lumFinal = luminance(color);
     lumFinal = saturate(lumFinal);
 
-    float shadowWeight = 1.0 - smoothstep(0.39, 0.55, lumFinal);
+    float shadowW = 1.0 - smoothstep(0.39, 0.55, lumFinal);
 
     float lumRemap =
         minLum +
         (maxLum - minLum) *
-        lerp(lumFinal, pow(lumFinal, darkResponse), shadowWeight);
+        lerp(lumFinal, pow(lumFinal, darkResponse), shadowW);
 
-    float scale = lumRemap / max(lumFinal, 1e-5);
-    color *= scale;
+    color *= lumRemap / max(lumFinal, 1e-5);
 
-    // ---------------- HIGHLIGHT COMPRESSION ----------------
-    float highlightMask =
-        smoothstep(highlightStart, 1.0, lumFinal);
-
-    color *= 1.0 - highlightMask * highlightSoften;
+    // ---------------- HIGHLIGHT ROLL-OFF ----------------
+    float highlight = smoothstep(highlightStart, 1.0, lumFinal);
+    color *= 1.0 - highlight * highlightSoften;
 
     // ---------------- OUTPUT ----------------
-    return float4(
-        saturate(pow(color, 1.0 / safeGamma)),
-        1.0
-    );
+    return float4(saturate(pow(color, invGamma)), 1.0);
 }
 
 // ---------------- Technique ----------------
