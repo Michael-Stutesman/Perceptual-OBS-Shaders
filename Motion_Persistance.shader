@@ -17,7 +17,6 @@ sampler_state textureSampler
 
 struct VertData { float4 pos : POSITION; float2 uv : TEXCOORD0; };
 
-// ---------------- Main Shader ----------------
 float4 mainImage(VertData v_in) : TARGET
 {
     float2 uv = v_in.uv;
@@ -25,45 +24,68 @@ float4 mainImage(VertData v_in) : TARGET
     float4 curr = image.Sample(textureSampler, uv);
     float4 prevRaw = previous_output.Sample(textureSampler, uv);
 
-    // -------------------------------------------------
-    // 🧊 HISTORY SAFETY LAYER (ONLY CHANGE THAT MATTERS)
-    // Smoothly introduces history over first frames
-    // -------------------------------------------------
+    // ---------------- TEMPORAL SAFETY ----------------
     float historySafe = saturate(elapsed_time * 4.0);
     float4 prev = lerp(curr, prevRaw, historySafe);
 
-    const float3 LUMA = float3(0.2126,0.7152,0.0722);
+    const float3 LUMA = float3(0.2126, 0.7152, 0.0722);
 
     float lumCurr = dot(curr.rgb, LUMA);
     float lumPrev = dot(prev.rgb, LUMA);
 
-    float motion = saturate(abs(lumCurr - lumPrev) * 4.0 * (0.0167 / max(frameTime,0.001)));
+    // ---------------- STABLE MOTION CORE ----------------
+    float rawMotion = abs(lumCurr - lumPrev);
+
+    // soften spikes (key improvement)
+    float motion = saturate(rawMotion * 3.5);
+
+    // curve compression (prevents flicker amplification)
+    motion = motion * motion * (3.0 - 2.0 * motion);
+
+    motion *= 0.0167 / max(frameTime, 0.001);
 
     float perceptualStrength = 1.0 - exp2(-6.0 * strength * strength);
     float depthFactor = lerp(1.0 - depthWeight, 1.0, lumCurr);
 
-    float blend = min(saturate(perceptualStrength * motion * depthFactor), decayClamp);
+    float blend = min(
+        saturate(perceptualStrength * motion * depthFactor),
+        decayClamp
+    );
 
     float2 px = uv_pixel_interval;
 
-    float lumH = dot(image.Sample(textureSampler, uv + float2(px.x,0)).rgb -
-                     image.Sample(textureSampler, uv - float2(px.x,0)).rgb, LUMA);
+    // ---------------- STABLE GRADIENT ----------------
+    float lumL = dot(image.Sample(textureSampler, uv - float2(px.x, 0)).rgb, LUMA);
+    float lumR = dot(image.Sample(textureSampler, uv + float2(px.x, 0)).rgb, LUMA);
+    float lumU = dot(image.Sample(textureSampler, uv + float2(0, px.y)).rgb, LUMA);
+    float lumD = dot(image.Sample(textureSampler, uv - float2(0, px.y)).rgb, LUMA);
 
-    float lumV = dot(image.Sample(textureSampler, uv + float2(0,px.y)).rgb -
-                     image.Sample(textureSampler, uv - float2(0,px.y)).rgb, LUMA);
+    float2 grad = float2(lumR - lumL, lumU - lumD);
 
-    float2 blurDir = -normalize(float2(lumH, lumV) + 1e-6);
+    // stabilize weak gradients (prevents jitter)
+    float gradStrength = length(grad);
+    float2 dir = (gradStrength > 1e-4)
+        ? grad / gradStrength
+        : float2(0.0, 0.0);
 
-    // ---------------- Hardcoded 7 Subsamples ----------------
-    float4 accum =
-        previous_output.Sample(textureSampler, uv - blurDir*motion*px*(1.0/7.0)*1.0) * 0.142857 +
-        previous_output.Sample(textureSampler, uv - blurDir*motion*px*(1.0/7.0)*1.5) * 0.142857 +
-        previous_output.Sample(textureSampler, uv - blurDir*motion*px*(1.0/7.0)*2.0) * 0.142857 +
-        previous_output.Sample(textureSampler, uv - blurDir*motion*px*(2.0/7.0)*1.0) * 0.142857 +
-        previous_output.Sample(textureSampler, uv - blurDir*motion*px*(2.0/7.0)*1.5) * 0.142857 +
-        previous_output.Sample(textureSampler, uv - blurDir*motion*px*(2.0/7.0)*2.0) * 0.142857 +
-        previous_output.Sample(textureSampler, uv - blurDir*motion*px*(3.0/7.0)*1.0) * 0.142857;
+    // soften direction response (key stability layer)
+    dir *= saturate(gradStrength * 8.0);
 
-    // ---------------- Final Blend ----------------
+    float2 motionVec = dir * motion * px;
+
+    // ---------------- STABILIZED TEMPORAL BLUR ----------------
+    float4 history = previous_output.Sample(textureSampler, uv);
+
+    float4 forward  = previous_output.Sample(textureSampler, uv - motionVec * 0.55);
+    float4 backward = previous_output.Sample(textureSampler, uv + motionVec * 0.25);
+
+    float4 stabilized = (forward * 0.6 + backward * 0.4);
+
+    // inertia smoothing (reduces “drag jitter”)
+    float4 accum = lerp(history, stabilized, 0.5);
+
+    // anchor to prevent overshoot drift
+    accum = lerp(accum, curr, 0.06);
+
     return lerp(curr, accum, blend);
 }
