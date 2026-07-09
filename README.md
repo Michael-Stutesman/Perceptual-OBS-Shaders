@@ -191,8 +191,8 @@ This reduces perceived stutter in lower FPS content.
 | Control | Value |
 |--------|------|
 | Motion Strength | 0.6 – 0.8 |
-| Decay Clamp | 0.03 – 0.08 |
-| Depth Influence | 0.2 – 0.4 |
+| Decay Clamp | 0.05 – 0.1 |
+| Depth Influence | 0.0 – 0.3 |
 | Frame Time | 0 (Raw Mode) or match FPS |
 
 ---
