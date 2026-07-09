@@ -60,7 +60,7 @@ This is the recommended configuration for most users in this repository.
 ## Recommended Settings (Default Preset)
 
 Motion Strength: 0.7  
-Decay Clamp: 0.05  
+Decay Clamp: 0.1  
 Depth Influence: 0.0  
 Frame Time: 0 (Recommended Mode)
 
@@ -105,7 +105,6 @@ Helps maintain perceived sharpness in mixed lighting scenes.
 
 ## Limitations
 
-- Requires previous frame buffer support
 - Can introduce ghosting at very high strength values
 - Not true interpolation (no new frames are generated)
 - Still approximates motion (no explicit velocity buffer used)
