@@ -60,7 +60,7 @@ This is the recommended configuration for most users in this repository.
 ## Recommended Settings (Default Preset)
 
 Motion Strength: 0.7  
-Decay Clamp: 0.1  
+Decay Clamp: 0.05  
 Depth Influence: 0.0  
 Frame Time: 0 (Recommended Mode)
 
