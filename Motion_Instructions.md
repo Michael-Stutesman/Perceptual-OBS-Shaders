@@ -3,7 +3,7 @@
 ## Overview
 This shader reduces perceived stutter by blending motion over time using a previous frame buffer and motion-aware directional sampling.
 
-It makes 30 FPS content feel smoother on high refresh displays without true frame interpolation.
+It makes 30/60 FPS content feel smoother on high refresh displays without true frame interpolation.
 
 ---
 
@@ -60,8 +60,7 @@ This is the recommended configuration for most users in this repository.
 ## Recommended Settings (Default Preset)
 
 Motion Strength: 0.7  
-Decay Clamp: 0.05  
-Depth Influence: 0.0  
+Decay Clamp: 0.1    
 Frame Time: 0 (Recommended Mode)
 
 ---
@@ -81,16 +80,6 @@ Controls trail length and persistence cutoff.
 
 - Low → short, crisp motion
 - High → long ghost trails
-
----
-
-### Depth Influence
-Controls brightness-based motion behavior.
-
-- Dark areas → reduced persistence
-- Bright areas → increased visibility of motion trails
-
-Helps maintain perceived sharpness in mixed lighting scenes.
 
 ---
 
