@@ -25,15 +25,6 @@ uniform float decayClamp
     float step=0.001;
 > = 0.1;
 
-uniform float depthWeight
-<
-    string label="Depth Influence on Trails";
-    string widget_type="slider";
-    float minimum=0.0;
-    float maximum=1.0;
-    float step=0.001;
-> = 0.0;
-
 uniform float frameTime
 <
     string label="Frame Time (s)";
@@ -122,20 +113,11 @@ float4 mainImage(VertData v_in) : TARGET
         1.0 -
         exp2(-6.0 * strengthSq);
 
-    // Depth weighting
-    float depthFactor =
-        lerp(
-            1.0 - depthWeight,
-            1.0,
-            lumCurr
-        );
-
     float blend =
         min(
             saturate(
                 perceptualStrength *
-                motion *
-                depthFactor
+                motion
             ),
             decayClamp
         );
